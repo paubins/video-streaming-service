@@ -68,6 +68,9 @@ def add_together(a, b):
 def get_example():
     return render_template('index.html')
 
+@app.route('/about', methods=['GET'])
+def get_example():
+    return render_template('about.html')
 
 @app.route('/publishable-key', methods=['GET'])
 def get_publishable_key():
