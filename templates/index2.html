@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stripe Payment Page Recipe</title>
+    <meta name="description" content="A demo of Stripe Checkout" />
+
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="css/normalize.css" />
+    <link rel="stylesheet" href="css/global.css" />
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="/script.js" defer></script>
+  </head>
+
+  <body>
+    <div class="sr-root">
+      <div class="sr-main">
+        <header class="sr-header">
+          <div class="sr-header__logo"></div>
+        </header>
+        <div>
+          Video Streaming API is an API to generate unique 720p streaming endpoints that can server up to 20 simultaneous user.
+          <pre>
+          </pre>
+        </div>
+        <div class="sr-payment-summary payment-view">
+          <h1 class="order-amount">$14.00</h1>
+          <h4>per month subscription</h4>
+        </div>        
+        <div class="sr-payment-form payment-view">
+          <label class="sr-checkbox-label">
+            <span>Add optional donation</span>
+            <div class="donations">
+              <button class="donation" data-amount="1">$1</button>
+              <button class="donation" data-amount="5">$5</button>
+              <button class="donation" data-amount="20">$20</button>
+            </div>
+          <button id="submit">Checkout</button>
+        </div>
+    </div>
+    <div class="sr-content">
+      <div class="pasha-image-stack">
+        <img
+          src="https://picsum.photos/280/320?random=1"
+          width="140"
+          height="160"
+        />
+        <img
+          src="https://picsum.photos/280/320?random=2"
+          width="140"
+          height="160"
+        />
+        <img
+          src="https://picsum.photos/280/320?random=3"
+          width="140"
+          height="160"
+        />
+        <img
+          src="https://picsum.photos/280/320?random=4"
+          width="140"
+          height="160"
+        />
+      </div>
+    </div>
+    <script type="text/javascript">
+        window.doorbellOptions = {
+            "id": "12079",
+            "appKey": "lPUWdcwnvrrDoCBlpI2RaygbNyecaSLPtZKzuDcvewvox4cwiF87BFoQS2lz9svs"
+        };
+        (function(w, d, t) {
+            var hasLoaded = false;
+            function l() { if (hasLoaded) { return; } hasLoaded = true; window.doorbellOptions.windowLoaded = true; var g = d.createElement(t);g.id = 'doorbellScript';g.type = 'text/javascript';g.async = true;g.src = 'https://embed.doorbell.io/button/'+window.doorbellOptions['id']+'?t='+(new Date().getTime());(d.getElementsByTagName('head')[0]||d.getElementsByTagName('body')[0]).appendChild(g); }
+            if (w.attachEvent) { w.attachEvent('onload', l); } else if (w.addEventListener) { w.addEventListener('load', l, false); } else { l(); }
+            if (d.readyState == 'complete') { l(); }
+        }(window, document, 'script'));
+    </script>
+  </body>
+</html>
