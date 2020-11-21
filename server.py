@@ -9,9 +9,38 @@ Python 3.6 or newer required.
 import stripe
 import json
 import os
+import uuid
 
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from dotenv import load_dotenv, find_dotenv
+
+from flask_mail import Mail, Message
+
+from celery import Celery
+
+import CloudFlare
+from linode_api4 import LinodeClient, Image
+
+import time
+import dataset
+import random, string
+
+def make_celery(app):
+    celery = Celery(
+        app.import_name,
+        backend=app.config['CELERY_RESULT_BACKEND'],
+        broker=app.config['CELERY_BROKER_URL']
+    )
+    celery.conf.update(app.config)
+
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+
+    celery.Task = ContextTask
+    return celery
+
 
 # Setup Stripe python client library
 load_dotenv(find_dotenv())
@@ -23,6 +52,22 @@ static_dir = str(os.path.abspath(os.path.join(
 app = Flask(__name__, static_folder=static_dir,
             static_url_path="", template_folder=static_dir)
 
+app.config.update(
+    CELERY_BROKER_URL=os.environ.get('REDIS_URL'),
+    CELERY_RESULT_BACKEND=os.environ.get('REDIS_URL'),
+    MAIL_SERVER='smtp.sendgrid.net',
+    MAIL_PORT=587,
+    MAIL_USE_TLS=True,
+    MAIL_USERNAME=os.environ.get('SENDGRID_USERNAME'),
+    MAIL_PASSWORD=os.environ.get('SENDGRID_PASSWORD')
+)
+
+celery = make_celery(app)
+mail = Mail(app)
+
+@celery.task()
+def add_together(a, b):
+    return a + b
 
 @app.route('/', methods=['GET'])
 def get_example():
@@ -93,17 +138,103 @@ def webhook_received():
     data_object = data['object']
 
     if event_type == 'checkout.session.completed':
-        items = data_object['display_items']
-        customer = stripe.Customer.retrieve(data_object['customer'])
+        print("about to execute task")
+        reference_id, email = data_object["client_reference_id"], data_object["customer_email"]
+        print(reference_id)
+        print(email)
+        setup_streaming_instance.delay(reference_id, email)
+        print('subscribed')
 
-        if len(items) > 0 and items[0].custom and items[0].custom.name == 'Pasha e-book':
-            print(
-                '🔔 Customer is subscribed and bought an e-book! Send the e-book to ' + customer.email)
-        else:
-            print(
-                '🔔 Customer is subscribed but did not buy an e-book')
+        # items = data_object['display_items']
+        # customer = stripe.Customer.retrieve(data_object['customer'])
+
+        # if len(items) > 0 and items[0].custom and items[0].custom.name == 'Pasha e-book':
+        #     print(
+        #         '🔔 Customer is subscribed and bought an e-book! Send the e-book to ' + customer.email)
+        # else:
+        #     print(
+        #         '🔔 Customer is subscribed but did not buy an e-book')
 
     return jsonify({'status': 'success'})
+
+@app.route('/publish/', methods=['POST'])
+def index():
+    query = parse_qs(request.body.getvalue().decode('utf-8'))
+    streamToken = query["name"][0]
+    print(streamToken)
+ 
+@app.route('/resetToken/', methods=['POST'])
+def reset():
+    query = parse_qs(request.body.getvalue().decode('utf-8'))
+    streamToken = query["name"][0]
+    print(streamToken)
+
+@celery.task()
+def setup_streaming_instance(reference_id, email):
+    db = dataset.connect(os.getenv('DATABASE_URL'))
+
+    table = db['device']
+
+    # # read zones
+    # client = LinodeClient(os.getenv('LINODE_TOKEN'))
+    # available_regions = client.regions()
+    # chosen_region = available_regions[0]
+
+    # image = [i.id for i in client.images(Image.label == os.getenv('LINODE_IMAGE_NAME'))][0]
+
+    # new_linode, password = client.linode.instance_create(os.getenv('LINODE_TYPE'),
+    #                                                      chosen_region,
+    #                                                      image=image)
+
+    # ip_address = new_linode.ipv4[0]
+
+    ip_address = "1.1.1.1"
+    password = "password"
+
+    cf = CloudFlare.CloudFlare(token=os.getenv('CLOUDFLARE_READ_KEY'))
+    zones = cf.zones.get(params={'name' : os.getenv('CLOUDFLARE_DOMAIN')})
+    zone_id = None
+    for zone in zones:
+        zone_id = zone['id']
+        zone_name = zone['name']
+
+    subdomain = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    print(subdomain)
+    dns_record = {
+        'name': subdomain,
+        'type': "A",
+        'content': ip_address
+    }
+
+    # write zones
+    cf2 = CloudFlare.CloudFlare(token=os.getenv('CLOUDFLARE_WRITE_KEY'))
+    dns_record = cf2.zones.dns_records.post(zone_id, data=dns_record)
+
+    # print("ssh root@{} - {}".format(ip_address, password))
+
+    table.insert(dict(user_id=reference_id,
+        email=email,
+        linode_id="3", #new_linode.id
+        ip_address=ip_address,
+        password=password,
+        subdomain=subdomain,
+        zone_id=zone_id,
+        identifer=str(uuid.uuid4()),
+        stream_token=""))
+
+    msg = Message("Hello",
+                  sender="support@enterprisesworldwide.com",
+                  recipients=[email])
+    mail.send(msg)
+
+
+# @celery.task()
+# def check_status():
+#     while new_linode.status != "running":
+#         print(new_linode.status)
+#         time.sleep(os.getenv('SLEEP_INTERVAL'))
+
+#     print("online")
 
 
 if __name__ == '__main__':
