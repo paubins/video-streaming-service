@@ -14,9 +14,9 @@ urllib3==1.25.3
 Werkzeug==1.0.1
 gunicorn
 celery
-flask-mail
 dataset
 CloudFlare
 linode_api4
 redis
 psycopg2
+sendgrid

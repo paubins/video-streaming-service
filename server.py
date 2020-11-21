@@ -14,8 +14,6 @@ import uuid
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from dotenv import load_dotenv, find_dotenv
 
-from flask_mail import Mail, Message
-
 from celery import Celery
 
 import CloudFlare
@@ -24,6 +22,9 @@ from linode_api4 import LinodeClient, Image
 import time
 import dataset
 import random, string
+
+import sendgrid
+from sendgrid.helpers.mail import *
 
 def make_celery(app):
     celery = Celery(
@@ -55,15 +56,9 @@ app = Flask(__name__, static_folder=static_dir,
 app.config.update(
     CELERY_BROKER_URL=os.environ.get('REDIS_URL'),
     CELERY_RESULT_BACKEND=os.environ.get('REDIS_URL'),
-    MAIL_SERVER='smtp.sendgrid.net',
-    MAIL_PORT=587,
-    MAIL_USE_TLS=True,
-    MAIL_USERNAME=os.environ.get('SENDGRID_USERNAME'),
-    MAIL_PASSWORD=os.environ.get('SENDGRID_PASSWORD')
 )
 
 celery = make_celery(app)
-mail = Mail(app)
 
 @celery.task()
 def add_together(a, b):
@@ -138,12 +133,8 @@ def webhook_received():
     data_object = data['object']
 
     if event_type == 'checkout.session.completed':
-        print("about to execute task")
-        reference_id, email = data_object["client_reference_id"], data_object["customer_email"]
-        print(reference_id)
-        print(email)
-        setup_streaming_instance.delay(reference_id, email)
-        print('subscribed')
+        customer = stripe.Customer.retrieve(data_object["customer"])
+        setup_streaming_instance.delay(data_object["client_reference_id"], customer.email)
 
         # items = data_object['display_items']
         # customer = stripe.Customer.retrieve(data_object['customer'])
@@ -222,19 +213,36 @@ def setup_streaming_instance(reference_id, email):
         identifer=str(uuid.uuid4()),
         stream_token=""))
 
-    msg = Message("Hello",
-                  sender="support@enterprisesworldwide.com",
-                  recipients=[email])
-    mail.send(msg)
+    message = {
+        'personalizations': [
+            {
+                'to': [
+                    {
+                        'email': email
+                    }
+                ],
+                'subject': 'Sending with Twilio SendGrid is Fun'
+            }
+        ],
+        'from': {
+            'email': 'support@enterprisesworldwide.com'
+        },
+        'content': [
+            {
+                'type': 'text/html',
+                'value': '<strong>and easy to do anywhere, even with Python</strong>'
+            }
+        ]
+    }
 
+    api_key = os.environ.get('SENDGRID_API_KEY')
 
-# @celery.task()
-# def check_status():
-#     while new_linode.status != "running":
-#         print(new_linode.status)
-#         time.sleep(os.getenv('SLEEP_INTERVAL'))
-
-#     print("online")
+    try:
+        sg = sendgrid.SendGridAPIClient(api_key)
+        response = sg.send(message)
+        print("email sent")
+    except Exception as e:
+        print(str(e))
 
 
 if __name__ == '__main__':
