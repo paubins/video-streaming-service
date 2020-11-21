@@ -69,7 +69,7 @@ def get_example():
     return render_template('index.html')
 
 @app.route('/about', methods=['GET'])
-def get_example():
+def get_about():
     return render_template('about.html')
 
 @app.route('/publishable-key', methods=['GET'])
