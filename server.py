@@ -87,7 +87,7 @@ def get_publishable_key():
 def get_checkout_session():
     db = dataset.connect(os.getenv('DATABASE_URL'))
     table = db['device']
-    user = table.find_one(user_id=request.args.get('sessionId'))
+    user = table.find_one(stripe_session_id=request.args.get('sessionId'))
     return jsonify({
         "api_key" : user["identifer"]
     })
@@ -148,9 +148,9 @@ def webhook_received():
         print(data_object)
         db = dataset.connect(os.getenv('DATABASE_URL'))
         table = db['device']
-        table.insert(dict(user_id=data_object["id"],
+        table.insert(dict(,
             email=customer.email,
-            stripe_session_id="",
+            stripe_session_id=data_object["id"],
             linode_id="3", #new_linode.id
             ip_address="",
             password="",
@@ -288,7 +288,7 @@ def setup_streaming_instance(reference_id):
     print("ssh root@{} - {}".format(ip_address, password))
 
     table.update(dict(
-        user_id=reference_id,
+        stripe_session_id=reference_id,
         linode_id="3", #new_linode.id
         ip_address=ip_address,
         password=password,
@@ -296,9 +296,9 @@ def setup_streaming_instance(reference_id):
         zone_id=zone_id,
         publish_webhook="",
         publish_end_webhook="",
-        stream_token=""), ["user_id"])
+        stream_token=""), ["stripe_session_id"])
 
-    user = table.find_one(user_id=reference_id)
+    user = table.find_one(stripe_session_id=reference_id)
 
     message = {
         'personalizations': [
