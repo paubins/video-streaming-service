@@ -148,7 +148,7 @@ def webhook_received():
         print(data_object)
         db = dataset.connect(os.getenv('DATABASE_URL'))
         table = db['device']
-        table.insert(dict(,
+        table.insert(dict(
             email=customer.email,
             stripe_session_id=data_object["id"],
             linode_id="3", #new_linode.id
