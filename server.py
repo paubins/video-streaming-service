@@ -85,10 +85,12 @@ def get_publishable_key():
 # Fetch the Checkout Session to display the JSON result on the success page
 @app.route('/checkout-session', methods=['GET'])
 def get_checkout_session():
-    id = request.args.get('sessionId')
-    checkout_session = stripe.checkout.Session.retrieve(id)
-    return jsonify(checkout_session)
-
+    db = dataset.connect(os.getenv('DATABASE_URL'))
+    table = db['device']
+    user = table.find_one(user_id=request.args.get('sessionId'))
+    return jsonify({
+        "api_key" : user["identifer"]
+    })
 
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
@@ -143,26 +145,32 @@ def webhook_received():
 
     if event_type == 'checkout.session.completed':
         customer = stripe.Customer.retrieve(data_object["customer"])
-        setup_streaming_instance.delay(data_object["client_reference_id"], customer.email)
+        print(data_object)
+        db = dataset.connect(os.getenv('DATABASE_URL'))
+        table = db['device']
+        table.insert(dict(user_id=data_object["id"],
+            email=customer.email,
+            stripe_session_id="",
+            linode_id="3", #new_linode.id
+            ip_address="",
+            password="",
+            subdomain="",
+            zone_id="",
+            publish_webhook="",
+            publish_end_webhook="",
+            identifer=str(uuid.uuid4()),
+            stream_token=""))
 
-        # items = data_object['display_items']
-        # customer = stripe.Customer.retrieve(data_object['customer'])
-
-        # if len(items) > 0 and items[0].custom and items[0].custom.name == 'Pasha e-book':
-        #     print(
-        #         '🔔 Customer is subscribed and bought an e-book! Send the e-book to ' + customer.email)
-        # else:
-        #     print(
-        #         '🔔 Customer is subscribed but did not buy an e-book')
+        setup_streaming_instance.delay(data_object["id"], customer.email)
 
     return jsonify({'status': 'success'})
 
 @app.route('/getStreamKey/', methods=['POST'])
 def get_stream_key():
-    request_data = json.loads(request.data)
-    user_id = request_data['api_key']
     db = dataset.connect(os.getenv('DATABASE_URL'))
     table = db['device']
+    request_data = json.loads(request.data)
+    user_id = request_data['api_key']
     user = table.find_one(identifer=user_id)
     print(user_id)
     print(user)
@@ -238,7 +246,7 @@ def invoke_webhook(url, stream_token):
     
 
 @celery.task()
-def setup_streaming_instance(reference_id, email):
+def setup_streaming_instance(reference_id):
     db = dataset.connect(os.getenv('DATABASE_URL'))
     table = db['device']
 
@@ -279,10 +287,8 @@ def setup_streaming_instance(reference_id, email):
 
     print("ssh root@{} - {}".format(ip_address, password))
 
-    identifier = str(uuid.uuid4())
-
-    table.insert(dict(user_id=reference_id,
-        email=email,
+    table.update(dict(
+        user_id=reference_id,
         linode_id="3", #new_linode.id
         ip_address=ip_address,
         password=password,
@@ -290,18 +296,19 @@ def setup_streaming_instance(reference_id, email):
         zone_id=zone_id,
         publish_webhook="",
         publish_end_webhook="",
-        identifer=identifier,
-        stream_token=""))
+        stream_token=""), ["user_id"])
+
+    user = table.find_one(user_id=reference_id)
 
     message = {
         'personalizations': [
             {
                 'to': [
                     {
-                        'email': email
+                        'email': user["email"]
                     }
                 ],
-                'subject': 'Sending with Twilio SendGrid is Fun'
+                'subject': 'Video Streaming API Key'
             }
         ],
         'from': {
@@ -310,7 +317,7 @@ def setup_streaming_instance(reference_id, email):
         'content': [
             {
                 'type': 'text/html',
-                'value': f'user_id: {identifier}'
+                'value': f'api_key: {identifier}'
             }
         ]
     }
