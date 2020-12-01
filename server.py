@@ -74,7 +74,7 @@ def add_together(a, b):
 def get_example():
     return render_template('index.html')
 
-@app.route('/about', methods=['GET'])
+@app.route('/docs', methods=['GET'])
 def get_about():
     return render_template('about.html')
 
