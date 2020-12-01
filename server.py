@@ -22,6 +22,11 @@ from linode_api4 import LinodeClient, Image
 import time
 import dataset
 import random, string
+import requests
+
+from flask import jsonify
+
+from urllib.parse import parse_qs
 
 import sendgrid
 from sendgrid.helpers.mail import *
@@ -151,22 +156,77 @@ def webhook_received():
 
     return jsonify({'status': 'success'})
 
+@app.route('/getStreamKey/', methods=['POST'])
+def get_stream_key():
+    request_data = json.loads(request.data)
+    user_id = request_data['api_key']
+    db = dataset.connect(os.getenv('DATABASE_URL'))
+    table = db['device']
+    user = table.find_one(identifer=user_id)
+    print(user_id)
+    print(user)
+    if user["stream_token"] == "":
+        stream_token = ''.join(random.choices(string.ascii_uppercase +
+                             string.digits, k = 25)) 
+        publish_webhook = request_data["publish_webhook"]
+        publish_end_webhook =  request_data["publish_end_webhook"]
+        table.update(dict(identifer=user_id,
+            stream_token=stream_token,
+            publish_webhook=publish_webhook,
+            publish_end_webhook=publish_end_webhook), ["identifer"])
+    else:
+        stream_token = user["stream_token"]
+
+    return jsonify({"stream_token" : stream_token})
+
+# callbacks from nginx
 @app.route('/publish/', methods=['POST'])
-def index():
-    query = parse_qs(request.body.getvalue().decode('utf-8'))
-    streamToken = query["name"][0]
+def publish():
+    db = dataset.connect(os.getenv('DATABASE_URL'))
+    table = db['device']
+    streamToken = request.form["name"]
     print(streamToken)
+    user = table.find_one(stream_token=streamToken)
+    print(f"stream started at {streamToken}")
+    if user and user.get("publish_webhook"):
+        invoke_webhook.delay(user.get("publish_webhook"), streamToken)
+
+    return jsonify({"response" : "ok"})
  
 @app.route('/resetToken/', methods=['POST'])
 def reset():
-    query = parse_qs(request.body.getvalue().decode('utf-8'))
-    streamToken = query["name"][0]
-    print(streamToken)
+    db = dataset.connect(os.getenv('DATABASE_URL'))
+    table = db['device']
+    stream_token = request.form["name"]
+    print(stream_token)
+    user = table.find_one(stream_token=stream_token)
+    if user:
+        table.update(dict(identifer=user["identifer"], stream_token=""), ["identifer"])
+        print(f"stream ended at {stream_token}")
+        if user.get("publish_end_webhook"):
+            invoke_webhook.delay(user.get("publish_end_webhook"), stream_token)
+
+    return jsonify({"response" : "ok"})
+
+@app.route('/test1/', methods=['POST'])
+def test1():
+    print(request.form["stream_token"])
+    return jsonify({"response" : "ok1"})
+
+@app.route('/test2/', methods=['POST'])
+def test2():
+    print(request.form["stream_token"])
+    return jsonify({"response" : "ok1"})
+
+@celery.task()
+def invoke_webhook(url, stream_token):
+    print(f"webhook invoked {url}")
+    print(requests.post(url, data={'stream_token': stream_token}))
+    
 
 @celery.task()
 def setup_streaming_instance(reference_id, email):
     db = dataset.connect(os.getenv('DATABASE_URL'))
-
     table = db['device']
 
     # # read zones
@@ -204,7 +264,9 @@ def setup_streaming_instance(reference_id, email):
     cf2 = CloudFlare.CloudFlare(token=os.getenv('CLOUDFLARE_WRITE_KEY'))
     dns_record = cf2.zones.dns_records.post(zone_id, data=dns_record)
 
-    # print("ssh root@{} - {}".format(ip_address, password))
+    print("ssh root@{} - {}".format(ip_address, password))
+
+    identifier = str(uuid.uuid4())
 
     table.insert(dict(user_id=reference_id,
         email=email,
@@ -213,7 +275,9 @@ def setup_streaming_instance(reference_id, email):
         password=password,
         subdomain=subdomain,
         zone_id=zone_id,
-        identifer=str(uuid.uuid4()),
+        publish_webhook="",
+        publish_end_webhook="",
+        identifer=identifier,
         stream_token=""))
 
     message = {
@@ -233,7 +297,7 @@ def setup_streaming_instance(reference_id, email):
         'content': [
             {
                 'type': 'text/html',
-                'value': '<strong>and easy to do anywhere, even with Python</strong>'
+                'value': f'user_id: {identifier}'
             }
         ]
     }
