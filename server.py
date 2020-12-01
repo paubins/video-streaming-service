@@ -23,6 +23,7 @@ import time
 import dataset
 import random, string
 import requests
+import tldextract
 
 from flask import jsonify
 
@@ -165,6 +166,7 @@ def get_stream_key():
     user = table.find_one(identifer=user_id)
     print(user_id)
     print(user)
+    subdomain = None
     if user["stream_token"] == "":
         stream_token = ''.join(random.choices(string.ascii_uppercase +
                              string.digits, k = 25)) 
@@ -174,19 +176,30 @@ def get_stream_key():
             stream_token=stream_token,
             publish_webhook=publish_webhook,
             publish_end_webhook=publish_end_webhook), ["identifer"])
+        subdomain = user["subdomain"].lower()
     else:
         stream_token = user["stream_token"]
+        subdomain = user["subdomain"].lower()
 
-    return jsonify({"stream_token" : stream_token})
+    return jsonify({
+        "stream_token" : stream_token,
+        "rtmp_stream_endpoint" : f"rtmp://{subdomain}.enterprisesworldwide.com/live/{stream_token}",
+        "hls_endoint" : f"http://{subdomain}.enterprisesworldwide.com/hls/{stream_token}/index.m3u8"
+    })
 
 # callbacks from nginx
 @app.route('/publish/', methods=['POST'])
 def publish():
+    subdomain = tldextract.extract(request.form["swfUrl"]).subdomain
     db = dataset.connect(os.getenv('DATABASE_URL'))
     table = db['device']
     streamToken = request.form["name"]
     print(streamToken)
+    print(subdomain)
     user = table.find_one(stream_token=streamToken)
+    if not user:
+        return 'invalid publish', 400
+
     print(f"stream started at {streamToken}")
     if user and user.get("publish_webhook"):
         invoke_webhook.delay(user.get("publish_webhook"), streamToken)

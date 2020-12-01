@@ -20,3 +20,4 @@ linode_api4
 redis
 psycopg2
 sendgrid
+tldextract
