@@ -109,7 +109,7 @@ def create_checkout_session():
             mode="subscription",
             success_url=domain_url +
             "/success.html?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url=domain_url + "/cancel.html",
+            cancel_url=domain_url + "/",
             payment_method_types=["card"],
             allow_promotion_codes=True,
             line_items=line_items
@@ -152,7 +152,7 @@ def webhook_received():
             email=customer.email,
             stripe_session_id=data_object["id"],
             subscription=data_object["subscription"],
-            linode_id="3", #new_linode.id
+            linode_id="", #new_linode.id
             ip_address="",
             password="",
             subdomain="",
@@ -248,20 +248,13 @@ def invoke_webhook(url, stream_token):
 
 @app.route('/cancel/', methods=['GET'])
 def cancel_subscription():
-    #unwind everything
     table = db['device']
     user = table.find_once(stripe_session_id=request.args.get('sessionId'))
     if user:
-        cancel_sub_task.delay(user["stripe_session_id"])
+        stripe.Subscription.delete(user["subscription"])
         print(request.form["stream_token"])
 
-    return jsonify({"response" : "ok1"})
-
-@celery.task()
-def cancel_sub_task(session_id):
-    table = db['device']
-    user = table.find_once(stripe_session_id=session_id)
-    stripe.Subscription.delete(user["subscription"])
+    return render_template('cancel.html')
 
 @celery.task()
 def setup_streaming_instance(reference_id):
@@ -307,7 +300,7 @@ def setup_streaming_instance(reference_id):
 
     table.update(dict(
         stripe_session_id=reference_id,
-        linode_id="3", #new_linode.id
+        linode_id=new_linode.id,
         ip_address=ip_address,
         password=password,
         subdomain=subdomain,
@@ -336,7 +329,7 @@ def setup_streaming_instance(reference_id):
         'content': [
             {
                 'type': 'text/html',
-                'value': f'Below is your API key: <br/>api_key: {user["identifer"]}<br/><br/><a href="#">Cancel subscription</a>'
+                'value': f'Below is your API key: <br/>api_key: {user["identifer"]}<br/><br/><a href="/cancel/?sessionId={user["stripe_session_id"]}">Cancel subscription</a>'
             }
         ]
     }
