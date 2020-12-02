@@ -179,8 +179,8 @@ def get_stream_key():
     if user["stream_token"] == "":
         stream_token = ''.join(random.choices(string.ascii_uppercase +
                              string.digits, k = 25)) 
-        publish_webhook = request_data["publish_webhook"]
-        publish_end_webhook =  request_data["publish_end_webhook"]
+        publish_webhook = request_data.get("publish_webhook")
+        publish_end_webhook =  request_data.get("publish_end_webhook")
         table.update(dict(identifer=user_id,
             stream_token=stream_token,
             publish_webhook=publish_webhook,
@@ -262,20 +262,20 @@ def setup_streaming_instance(reference_id):
     table = db['device']
 
     # # read zones
-    # client = LinodeClient(os.getenv('LINODE_TOKEN'))
-    # available_regions = client.regions()
-    # chosen_region = available_regions[0]
+    client = LinodeClient(os.getenv('LINODE_TOKEN'))
+    available_regions = client.regions()
+    chosen_region = available_regions[0]
 
-    # image = [i.id for i in client.images(Image.label == os.getenv('LINODE_IMAGE_NAME'))][0]
+    image = [i.id for i in client.images(Image.label == os.getenv('LINODE_IMAGE_NAME'))][0]
 
-    # new_linode, password = client.linode.instance_create(os.getenv('LINODE_TYPE'),
-    #                                                      chosen_region,
-    #                                                      image=image)
+    new_linode, password = client.linode.instance_create(os.getenv('LINODE_TYPE'),
+                                                         chosen_region,
+                                                         image=image)
 
-    # ip_address = new_linode.ipv4[0]
+    ip_address = new_linode.ipv4[0]
 
-    ip_address = "1.1.1.1"
-    password = "password"
+    # ip_address = "1.1.1.1"
+    # password = "password"
 
     cf = CloudFlare.CloudFlare(token=os.getenv('CLOUDFLARE_READ_KEY'))
     zones = cf.zones.get(params={'name' : os.getenv('CLOUDFLARE_DOMAIN')})
