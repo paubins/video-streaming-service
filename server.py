@@ -176,6 +176,8 @@ def get_stream_key():
     print(user_id)
     print(user)
     subdomain = None
+    publish_webhook = None
+    publish_end_webhook = None
     if user["stream_token"] == "":
         stream_token = ''.join(random.choices(string.ascii_uppercase +
                              string.digits, k = 25)) 
@@ -194,6 +196,8 @@ def get_stream_key():
         "stream_token" : stream_token,
         "rtmp_stream_endpoint" : f"rtmp://{subdomain}.enterprisesworldwide.com/live/{stream_token}",
         "hls_endoint" : f"http://{subdomain}.enterprisesworldwide.com/hls/{stream_token}/index.m3u8"
+        "publish_webhook" : publish_webhook,
+        "publish_end_webhook" : publish_end_webhook
     })
 
 # callbacks from nginx
