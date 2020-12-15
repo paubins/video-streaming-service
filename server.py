@@ -195,7 +195,7 @@ def get_stream_key():
     return jsonify({
         "stream_token" : stream_token,
         "rtmp_stream_endpoint" : f"rtmp://{subdomain}.enterprisesworldwide.com/live/{stream_token}",
-        "hls_endoint" : f"http://{subdomain}.enterprisesworldwide.com/hls/{stream_token}/index.m3u8"
+        "hls_endoint" : f"http://{subdomain}.enterprisesworldwide.com/hls/{stream_token}/index.m3u8",
         "publish_webhook" : publish_webhook,
         "publish_end_webhook" : publish_end_webhook
     })
